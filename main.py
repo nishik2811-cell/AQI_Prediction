@@ -196,3 +196,92 @@ df[numeric_cols] = df[numeric_cols].round(2)
 
 df.to_csv("delhi_aqi_final.csv", index=False)
 print("Saved → delhi_aqi_final.csv")
+
+
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+
+df["date"] = pd.to_datetime(df["date"])
+
+df["hour"] = df["date"].dt.hour
+df["month"] = df["date"].dt.month
+df["day"] = df["date"].dt.day
+df["day_of_week"] = df["date"].dt.dayofweek
+df["week_of_year"] = df["date"].dt.isocalendar().week.astype(int)
+df["quarter"] = df["date"].dt.quarter
+df["is_weekend"] = (df["day_of_week"] >= 5).astype(int)
+
+def get_season(month):
+    if month in [12, 1, 2]:
+        return 1
+    elif month in [3, 4, 5]:
+        return 2
+    elif month in [6, 7, 8]:
+        return 3
+    else:
+        return 4
+
+df["season"] = df["month"].apply(get_season)
+
+df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
+df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
+
+df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
+df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
+
+df["season_sin"] = np.sin(2 * np.pi * df["season"] / 4)
+df["season_cos"] = np.cos(2 * np.pi * df["season"] / 4)
+
+df["weekday_sin"] = np.sin(2 * np.pi * df["day_of_week"] / 7)
+df["weekday_cos"] = np.cos(2 * np.pi * df["day_of_week"] / 7)
+
+pollutant_columns = [
+    "pm2_5",
+    "pm10",
+    "no",
+    "no2",
+    "nh3",
+    "co",
+    "so2",
+    "o3"
+]
+
+pollutant_columns = [col for col in pollutant_columns if col in df.columns]
+
+for col in pollutant_columns:
+    df[f"{col}_lag1"] = df[col].shift(1)
+    df[f"{col}_lag24"] = df[col].shift(24)
+
+for col in ["pm2_5", "pm10", "co"]:
+    if col in df.columns:
+        df[f"{col}_rolling3"] = df[col].rolling(window=3, min_periods=1).mean()
+        df[f"{col}_rolling24"] = df[col].rolling(window=24, min_periods=1).mean()
+
+df = df.bfill()
+
+scale_columns = pollutant_columns + [
+    col for col in df.columns
+    if "_lag" in col or "_rolling" in col
+]
+
+scaler = StandardScaler()
+df[scale_columns] = scaler.fit_transform(df[scale_columns])
+
+print("\nFeature Engineering Completed Successfully")
+print("Shape after Feature Engineering:", df.shape)
+print("\nNew Features Added:")
+print([
+    "hour_sin", "hour_cos",
+    "month_sin", "month_cos",
+    "season_sin", "season_cos",
+    "weekday_sin", "weekday_cos"
+])
+
+print("\nScaled Columns:")
+print(scale_columns)
+
+print("\nFirst Five Rows:")
+print(df.head())
+
+df.to_csv("delhi_aqi_feature_engineered.csv", index=False)
+print("\nSaved → delhi_aqi_feature_engineered.csv")
