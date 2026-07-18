@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delhi Air, Predicted — AQI Forecasting Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#14171a;
+  --bg-panel:#1b1f22;
+  --bg-panel-2:#20262a;
+  --line:#2a2f33;
+  --text:#ecedee;
+  --text-dim:#8a9199;
+  --text-dimmer:#5c6469;
+
+  --good:#2fa66b;
+  --satisfactory:#9ccb3b;
+  --moderate:#f2c230;
+  --poor:#f2924a;
+  --verypoor:#e75454;
+  --severe:#8c1f3f;
+
+  --font-display:'Space Grotesk', sans-serif;
+  --font-body:'Inter', sans-serif;
+  --font-mono:'IBM Plex Mono', monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-body);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+::selection{background:var(--moderate);color:#14171a;}
+
+a{color:inherit;}
+
+.wrap{max-width:1080px;margin:0 auto;padding:0 32px;}
+
+/* ---------- haze background ---------- */
+.haze{
+  position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(ellipse 900px 500px at 15% -5%, rgba(140,31,63,0.16), transparent 60%),
+    radial-gradient(ellipse 800px 600px at 90% 10%, rgba(242,146,74,0.10), transparent 55%),
+    var(--bg);
+}
+
+/* ---------- nav ---------- */
+nav{
+  position:sticky;top:0;z-index:50;
+  backdrop-filter:blur(10px);
+  background:rgba(20,23,26,0.82);
+  border-bottom:1px solid var(--line);
+}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:60px;}
+.nav-mark{font-family:var(--font-mono);font-size:13px;letter-spacing:0.03em;color:var(--text-dim);}
+.nav-mark b{color:var(--text);font-weight:600;}
+.nav-links{display:flex;gap:28px;font-size:13px;font-family:var(--font-mono);color:var(--text-dim);}
+.nav-links a{text-decoration:none;transition:color .15s;}
+.nav-links a:hover{color:var(--text);}
+@media(max-width:640px){.nav-links{display:none;}}
+
+/* ---------- hero ---------- */
+header.hero{padding:96px 0 64px;}
+.eyebrow{
+  font-family:var(--font-mono);font-size:12.5px;letter-spacing:0.08em;
+  color:var(--text-dimmer);text-transform:uppercase;margin-bottom:22px;
+  display:flex;align-items:center;gap:10px;
+}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--severe);box-shadow:0 0 8px var(--severe);}
+h1{
+  font-family:var(--font-display);
+  font-weight:700;
+  font-size:clamp(34px, 5.4vw, 60px);
+  line-height:1.06;
+  letter-spacing:-0.01em;
+  max-width:820px;
+}
+h1 .accent{color:var(--poor);}
+.hero-sub{
+  margin-top:22px;max-width:600px;font-size:17px;color:var(--text-dim);
+}
+.spectrum-bar{
+  margin-top:44px;height:10px;border-radius:6px;overflow:hidden;
+  display:flex;
+  box-shadow:0 0 24px rgba(140,31,63,0.18);
+}
+.spectrum-bar span{flex:1;height:100%;}
+.spectrum-labels{
+  margin-top:8px;display:flex;font-family:var(--font-mono);font-size:10.5px;color:var(--text-dimmer);
+}
+.spectrum-labels span{flex:1;text-align:center;}
+.spectrum-labels span:first-child{text-align:left;}
+.spectrum-labels span:last-child{text-align:right;}
+
+.hero-stats{
+  margin-top:56px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;
+}
+.hero-stat{background:var(--bg-panel);padding:22px 20px;}
+.hero-stat .num{font-family:var(--font-mono);font-size:26px;font-weight:600;color:var(--text);}
+.hero-stat .lbl{margin-top:6px;font-size:12px;color:var(--text-dim);}
+@media(max-width:720px){.hero-stats{grid-template-columns:repeat(2,1fr);}}
+
+/* ---------- sections ---------- */
+section{padding:88px 0;border-top:1px solid var(--line);}
+.section-head{max-width:640px;margin-bottom:48px;}
+.section-tag{
+  font-family:var(--font-mono);font-size:12px;color:var(--text-dimmer);
+  letter-spacing:0.06em;text-transform:uppercase;margin-bottom:14px;
+}
+h2{
+  font-family:var(--font-display);font-weight:600;font-size:clamp(24px,3.4vw,34px);
+  letter-spacing:-0.01em;
+}
+.section-desc{margin-top:14px;color:var(--text-dim);font-size:15.5px;max-width:560px;}
+
+/* ---------- pipeline steps ---------- */
+.pipeline{display:flex;flex-direction:column;gap:0;}
+.pstep{
+  display:grid;grid-template-columns:64px 1fr;gap:24px;
+  padding:26px 0;border-top:1px solid var(--line);
+}
+.pstep:first-child{border-top:none;}
+.pstep .pnum{font-family:var(--font-mono);font-size:13px;color:var(--text-dimmer);padding-top:3px;}
+.pstep h3{font-family:var(--font-display);font-size:18px;font-weight:600;margin-bottom:6px;}
+.pstep p{color:var(--text-dim);font-size:14.5px;max-width:600px;}
+.pstep .tagrow{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;}
+.tag{
+  font-family:var(--font-mono);font-size:11px;padding:3px 9px;border-radius:20px;
+  border:1px solid var(--line);color:var(--text-dim);
+}
+
+/* ---------- stat cards / grid ---------- */
+.grid-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+@media(max-width:820px){.grid-cards{grid-template-columns:repeat(2,1fr);}}
+.card{
+  background:var(--bg-panel);border:1px solid var(--line);border-radius:10px;padding:20px;
+}
+.card .cnum{font-family:var(--font-mono);font-size:22px;font-weight:600;}
+.card .clbl{margin-top:6px;font-size:12.5px;color:var(--text-dim);}
+
+.panel{
+  background:var(--bg-panel);border:1px solid var(--line);border-radius:12px;padding:28px;
+}
+
+/* ---------- charts ---------- */
+.chart-row{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;align-items:stretch;}
+@media(max-width:860px){.chart-row{grid-template-columns:1fr;}}
+.chart-title{font-family:var(--font-mono);font-size:12.5px;color:var(--text-dim);margin-bottom:16px;text-transform:uppercase;letter-spacing:0.04em;}
+svg text{font-family:var(--font-mono);}
+.axis-label{fill:var(--text-dimmer);font-size:10px;}
+.gridline{stroke:var(--line);stroke-width:1;}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-family:var(--font-mono);font-size:11px;color:var(--text-dim);}
+.legend .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle;}
+
+/* bucket bar */
+.bucket-bar{display:flex;height:38px;border-radius:8px;overflow:hidden;margin-top:6px;}
+.bucket-seg{position:relative;transition:filter .15s;}
+.bucket-seg:hover{filter:brightness(1.15);}
+.bucket-legend{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:20px;}
+@media(max-width:560px){.bucket-legend{grid-template-columns:repeat(2,1fr);}}
+.bl-item{display:flex;align-items:center;gap:8px;font-size:13px;}
+.bl-sw{width:11px;height:11px;border-radius:3px;flex-shrink:0;}
+.bl-count{margin-left:auto;font-family:var(--font-mono);color:var(--text-dim);font-size:12.5px;}
+
+/* footer */
+footer{padding:56px 0 80px;border-top:1px solid var(--line);}
+footer p{font-size:13px;color:var(--text-dimmer);max-width:600px;}
+footer .foot-links{margin-top:18px;display:flex;gap:20px;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);}
+footer .credits{margin-top:28px;padding-top:22px;border-top:1px solid var(--line);font-family:var(--font-mono);font-size:12px;color:var(--text-dim);letter-spacing:0.02em;}
+
+.reveal{opacity:0;transform:translateY(14px);transition:opacity .6s ease, transform .6s ease;}
+.reveal.in{opacity:1;transform:translateY(0);}
+
+.tooltip{
+  position:absolute;pointer-events:none;background:#0e1012;border:1px solid var(--line);
+  border-radius:6px;padding:7px 10px;font-family:var(--font-mono);font-size:11px;color:var(--text);
+  opacity:0;transition:opacity .1s;white-space:nowrap;z-index:10;
+}
+.chart-wrap{position:relative;}
+</style>
+</head>
+<body>
+<div class="haze"></div>
+
+<nav>
+  <div class="wrap">
+    <div class="nav-mark"><b>DELHI/AQI</b> · forecasting pipeline</div>
+    <div class="nav-links">
+      <a href="#pipeline">Pipeline</a>
+      <a href="#cleaning">Cleaning</a>
+      <a href="#patterns">Patterns</a>
+      <a href="#model">Model</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow"><span class="dot"></span> Delhi, Nov 2020 – present · hourly sensor data</div>
+    <h1>We taught a model to read <span class="accent">Delhi's next breath</span> from its last 24 hours.</h1>
+    <p class="hero-sub">Three years of hourly pollution readings, cleaned of sensor glitches and blind spots, turned into a Random Forest that predicts the Air Quality Index before it happens — off by an average of 16 points on a 0–500 scale.</p>
+
+    <div class="spectrum-bar" id="heroSpectrum"></div>
+    <div class="spectrum-labels">
+      <span>Good</span><span>Satisfactory</span><span>Moderate</span><span>Poor</span><span>Very Poor</span><span>Severe</span>
+    </div>
+
+    <div class="hero-stats reveal" id="heroStats">
+      <div class="hero-stat"><div class="num" id="statR2">–</div><div class="lbl">R² on unseen hours</div></div>
+      <div class="hero-stat"><div class="num" id="statMAE">–</div><div class="lbl">Mean error (AQI pts)</div></div>
+      <div class="hero-stat"><div class="num" id="statRows">–</div><div class="lbl">Hourly readings used</div></div>
+      <div class="hero-stat"><div class="num" id="statFeat">–</div><div class="lbl">Engineered features</div></div>
+    </div>
+  </div>
+</header>
+
+<section id="pipeline">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="section-tag">01 — What this project does</div>
+      <h2>From a raw sensor feed to a next-hour forecast</h2>
+      <p class="section-desc">Five stages, run in order, turn a noisy CSV of hourly pollutant readings into a working predictor of Delhi's Air Quality Index.</p>
+    </div>
+    <div class="pipeline">
+      <div class="pstep reveal">
+        <div class="pnum">01</div>
+        <div>
+          <h3>Diagnose the sensors</h3>
+          <p>Check every column for missing values, duplicate timestamps, and physically impossible negative readings before touching anything.</p>
+          <div class="tagrow"><span class="tag">co · no · no2 · o3 · so2</span><span class="tag">pm2.5 · pm10 · nh3</span></div>
+        </div>
+      </div>
+      <div class="pstep reveal">
+        <div class="pnum">02</div>
+        <div>
+          <h3>Fill the time gaps</h3>
+          <p>Reindex to a strict one-reading-per-hour grid and interpolate across any hour the sensors missed, so every downstream step sees a continuous timeline.</p>
+        </div>
+      </div>
+      <div class="pstep reveal">
+        <div class="pnum">03</div>
+        <div>
+          <h3>Correct anomalies</h3>
+          <p>Cap statistical outliers, unfreeze sensors that got stuck repeating one value, and fix ozone readings that stayed implausibly high overnight — when there's no sunlight left to produce ozone.</p>
+        </div>
+      </div>
+      <div class="pstep reveal">
+        <div class="pnum">04</div>
+        <div>
+          <h3>Engineer the features</h3>
+          <p>Add time-of-day and season as smooth cyclical signals, plus lagged and rolling pollutant history — using only what would have been known at that hour, with no peeking at the future.</p>
+        </div>
+      </div>
+      <div class="pstep reveal">
+        <div class="pnum">05</div>
+        <div>
+          <h3>Compute AQI and train</h3>
+          <p>Derive the official AQI from PM2.5 and PM10 sub-indices, then train a Random Forest on a chronological split — tested only on hours the model never trained on.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="cleaning">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="section-tag">02 — The data</div>
+      <h2>What the cleaning stage actually caught</h2>
+      <p class="section-desc">The raw feed looked complete — no nulls, no duplicates — but the sensors had quieter problems: readings that got stuck, and outliers that would have thrown the model off.</p>
+    </div>
+
+    <div class="grid-cards reveal">
+      <div class="card"><div class="cnum" id="c1">–</div><div class="clbl">Readings before cleaning</div></div>
+      <div class="card"><div class="cnum" id="c2">–</div><div class="clbl">Readings after gap-filling</div></div>
+      <div class="card"><div class="cnum" style="color:var(--poor)" id="c3">–</div><div class="clbl">Outlier values capped</div></div>
+      <div class="card"><div class="cnum" style="color:var(--verypoor)" id="c4">–</div><div class="clbl">Frozen sensor values fixed</div></div>
+    </div>
+
+    <div class="panel reveal" style="margin-top:14px;">
+      <div class="chart-title">Nighttime ozone correction</div>
+      <p style="color:var(--text-dim);font-size:14px;max-width:640px;">Ozone forms from sunlight hitting pollutants, so it should fall after dark. <span id="nightCount" style="color:var(--text);font-family:var(--font-mono);"></span> overnight readings that stayed above a plausible threshold were smoothed and capped — visible as the flattened floor in the hourly pattern below.</p>
+    </div>
+  </div>
+</section>
+
+<section id="patterns">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="section-tag">03 — What the cleaned data shows</div>
+      <h2>Delhi's air has a rhythm</h2>
+      <p class="section-desc">Once cleaned, three years of readings reveal clear daily and seasonal patterns — the same patterns the model leans on to forecast.</p>
+    </div>
+
+    <div class="chart-row reveal">
+      <div class="panel">
+        <div class="chart-title">Average AQI by hour of day</div>
+        <div class="chart-wrap"><svg id="hourlyChart" viewBox="0 0 560 260" width="100%"></svg></div>
+      </div>
+      <div class="panel">
+        <div class="chart-title">Average AQI by month</div>
+        <div class="chart-wrap"><svg id="monthlyChart" viewBox="0 0 400 260" width="100%"></svg></div>
+      </div>
+    </div>
+
+    <div class="panel reveal" style="margin-top:20px;">
+      <div class="chart-title">Daily average AQI, full period</div>
+      <div class="chart-wrap"><svg id="dailyChart" viewBox="0 0 1000 220" width="100%"></svg></div>
+    </div>
+
+    <div class="panel reveal" style="margin-top:20px;">
+      <div class="chart-title">Share of hours in each AQI band</div>
+      <div class="bucket-bar" id="bucketBar"></div>
+      <div class="bucket-legend" id="bucketLegend"></div>
+    </div>
+  </div>
+</section>
+
+<section id="model">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="section-tag">04 — The prediction</div>
+      <h2>How well the model actually forecasts</h2>
+      <p class="section-desc">Tested only on the most recent 20% of hours — a genuine future the model never trained on — not a random shuffled sample.</p>
+    </div>
+
+    <div class="chart-row reveal">
+      <div class="panel">
+        <div class="chart-title">Predicted vs. actual AQI (test hours)</div>
+        <div class="chart-wrap"><svg id="scatterChart" viewBox="0 0 480 480" width="100%"></svg></div>
+        <div class="legend">
+          <span><span class="sw" style="background:var(--poor)"></span>prediction</span>
+          <span><span class="sw" style="background:var(--satisfactory)"></span>perfect forecast</span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="chart-title">What the model leans on most</div>
+        <div class="chart-wrap"><svg id="importanceChart" viewBox="0 0 460 480" width="100%"></svg></div>
+      </div>
+    </div>
+
+    <div class="grid-cards reveal" style="margin-top:20px;">
+      <div class="card"><div class="cnum" id="m1">–</div><div class="clbl">R² score (1.0 = perfect)</div></div>
+      <div class="card"><div class="cnum" id="m2">–</div><div class="clbl">Mean absolute error</div></div>
+      <div class="card"><div class="cnum" id="m3">–</div><div class="clbl">Training hours</div></div>
+      <div class="card"><div class="cnum" id="m4">–</div><div class="clbl">Held-out test hours</div></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>AQI is derived from PM2.5 and PM10 sub-indices on the Indian CPCB scale (0–500). The model is a Random Forest trained on lagged pollutant history, rolling averages, and cyclical time features, split chronologically so the test set is genuinely unseen future data.</p>
+    <div class="foot-links">
+      <span>delhi_aqi.csv → cleaning → feature engineering → random forest</span>
+    </div>
+    <div class="credits">Made by Nishita Kumari, Shaurya Srivastava, Gauri Bansal, Sarvendra V. Balraj Singh &amp; Atharva Singh — built to make Delhi's air a little easier to read.</div>
+  </div>
+</footer>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script src="data.js"></script>
+<script>
+const BUCKET_COLORS = {
+  "Good":"var(--good)","Satisfactory":"var(--satisfactory)","Moderate":"var(--moderate)",
+  "Poor":"var(--poor)","Very Poor":"var(--verypoor)","Severe":"var(--severe)"
+};
+const BUCKET_ORDER = ["Good","Satisfactory","Moderate","Poor","Very Poor","Severe"];
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v.replace('var(','').replace(')','')).trim();
+const colorOf = b => css(BUCKET_COLORS[b]);
+
+function fmt(n){ return n.toLocaleString('en-US'); }
+
+// ---- hero spectrum bar ----
+(function(){
+  const bar = document.getElementById('heroSpectrum');
+  BUCKET_ORDER.forEach(b=>{
+    const s = document.createElement('span');
+    s.style.background = colorOf(b);
+    bar.appendChild(s);
+  });
+})();
+
+// ---- hero + metric numbers ----
+document.getElementById('statR2').textContent = DATA.r2.toFixed(2);
+document.getElementById('statMAE').textContent = '±' + DATA.mae.toFixed(1);
+document.getElementById('statRows').textContent = fmt(DATA.rows_after_gap_fill);
+document.getElementById('statFeat').textContent = DATA.features_engineered;
+
+document.getElementById('c1').textContent = fmt(DATA.rows_before);
+document.getElementById('c2').textContent = fmt(DATA.rows_after_gap_fill);
+const totalCapped = Object.values(DATA.anomaly_fixes.outliers_capped).reduce((a,b)=>a+b,0);
+document.getElementById('c3').textContent = fmt(totalCapped);
+const totalFrozen = Object.values(DATA.anomaly_fixes.sensor_freeze_fixed).reduce((a,b)=>a+b,0);
+document.getElementById('c4').textContent = fmt(totalFrozen);
+document.getElementById('nightCount').textContent = fmt(DATA.anomaly_fixes.night_o3_corrected);
+
+document.getElementById('m1').textContent = DATA.r2.toFixed(3);
+document.getElementById('m2').textContent = DATA.mae.toFixed(2) + ' pts';
+document.getElementById('m3').textContent = fmt(DATA.n_train);
+document.getElementById('m4').textContent = fmt(DATA.n_test);
+
+// ---- bucket bar ----
+(function(){
+  const bar = document.getElementById('bucketBar');
+  const legend = document.getElementById('bucketLegend');
+  const total = Object.values(DATA.bucket_counts).reduce((a,b)=>a+b,0);
+  BUCKET_ORDER.forEach(b=>{
+    const count = DATA.bucket_counts[b] || 0;
+    const pct = (count/total*100);
+    const seg = document.createElement('div');
+    seg.className = 'bucket-seg';
+    seg.style.width = pct + '%';
+    seg.style.background = colorOf(b);
+    seg.addEventListener('mousemove', e=>showTip(e, `${b}: ${fmt(count)} hrs (${pct.toFixed(1)}%)`));
+    seg.addEventListener('mouseleave', hideTip);
+    bar.appendChild(seg);
+
+    const item = document.createElement('div');
+    item.className = 'bl-item';
+    item.innerHTML = `<span class="bl-sw" style="background:${colorOf(b)}"></span>${b}<span class="bl-count">${pct.toFixed(1)}%</span>`;
+    legend.appendChild(item);
+  });
+})();
+
+// ---- tooltip helpers ----
+const tip = document.getElementById('tooltip');
+function showTip(e, text){
+  tip.textContent = text;
+  tip.style.left = (e.pageX + 12) + 'px';
+  tip.style.top = (e.pageY - 28) + 'px';
+  tip.style.opacity = 1;
+}
+function hideTip(){ tip.style.opacity = 0; }
+
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs){
+  const e = document.createElementNS(NS, tag);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+// ---- hourly bar chart ----
+(function(){
+  const svg = document.getElementById('hourlyChart');
+  const W=560,H=260,padL=34,padR=10,padT=10,padB=28;
+  const hours = Object.keys(DATA.hourly_avg_aqi).map(Number).sort((a,b)=>a-b);
+  const vals = hours.map(h=>DATA.hourly_avg_aqi[h]);
+  const maxV = Math.max(...vals)*1.1;
+  const bw = (W-padL-padR)/hours.length;
+
+  [0,0.25,0.5,0.75,1].forEach(f=>{
+    const y = padT + (H-padT-padB)*(1-f);
+    svg.appendChild(el('line',{x1:padL,x2:W-padR,y1:y,y2:y,class:'gridline'}));
+    svg.appendChild(Object.assign(el('text',{x:4,y:y+3,class:'axis-label'}),{textContent:Math.round(maxV*f)}));
+  });
+
+  hours.forEach((h,i)=>{
+    const v = DATA.hourly_avg_aqi[h];
+    const bh = (v/maxV)*(H-padT-padB);
+    const x = padL + i*bw;
+    const y = H-padB-bh;
+    const bucket = bucketFor(v);
+    const rect = el('rect',{x:x+1.5,y,width:bw-3,height:bh,fill:colorOf(bucket),rx:2,opacity:0.9});
+    rect.addEventListener('mousemove', e=>showTip(e, `${h}:00 — AQI ${v}`));
+    rect.addEventListener('mouseleave', hideTip);
+    svg.appendChild(rect);
+    if(h%3===0){
+      svg.appendChild(Object.assign(el('text',{x:x+bw/2,y:H-8,'text-anchor':'middle',class:'axis-label'}),{textContent:h}));
+    }
+  });
+})();
+
+// ---- monthly line/area chart ----
+(function(){
+  const svg = document.getElementById('monthlyChart');
+  const W=400,H=260,padL=34,padR=10,padT=10,padB=28;
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const vals = months.map(m=>DATA.monthly_avg_aqi[m]);
+  const maxV = Math.max(...vals)*1.1;
+  const stepX = (W-padL-padR)/(months.length-1);
+
+  [0,0.5,1].forEach(f=>{
+    const y = padT + (H-padT-padB)*(1-f);
+    svg.appendChild(el('line',{x1:padL,x2:W-padR,y1:y,y2:y,class:'gridline'}));
+    svg.appendChild(Object.assign(el('text',{x:2,y:y+3,class:'axis-label'}),{textContent:Math.round(maxV*f)}));
+  });
+
+  let path = '';
+  months.forEach((m,i)=>{
+    const x = padL + i*stepX;
+    const y = padT + (H-padT-padB)*(1-vals[i]/maxV);
+    path += (i===0?'M':'L') + x + ',' + y + ' ';
+  });
+  const areaPath = path + `L${padL+(months.length-1)*stepX},${H-padB} L${padL},${H-padB} Z`;
+  svg.appendChild(el('path',{d:areaPath, fill:'var(--poor)', opacity:0.12}));
+  svg.appendChild(el('path',{d:path, fill:'none', stroke:'var(--poor)', 'stroke-width':2}));
+
+  months.forEach((m,i)=>{
+    const x = padL + i*stepX;
+    const y = padT + (H-padT-padB)*(1-vals[i]/maxV);
+    const c = el('circle',{cx:x,cy:y,r:3.5,fill:colorOf(bucketFor(vals[i])),stroke:'#14171a','stroke-width':1});
+    c.addEventListener('mousemove', e=>showTip(e, `${m} — AQI ${vals[i]}`));
+    c.addEventListener('mouseleave', hideTip);
+    svg.appendChild(c);
+    if(i%2===0) svg.appendChild(Object.assign(el('text',{x, y:H-8,'text-anchor':'middle',class:'axis-label'}),{textContent:m}));
+  });
+})();
+
+// ---- daily area chart (full period) ----
+(function(){
+  const svg = document.getElementById('dailyChart');
+  const W=1000,H=220,padL=40,padR=10,padT=10,padB=24;
+  const data = DATA.daily_avg_aqi;
+  const maxV = Math.max(...data.map(d=>d.aqi))*1.05;
+  const stepX = (W-padL-padR)/(data.length-1);
+
+  [0,0.5,1].forEach(f=>{
+    const y = padT + (H-padT-padB)*(1-f);
+    svg.appendChild(el('line',{x1:padL,x2:W-padR,y1:y,y2:y,class:'gridline'}));
+    svg.appendChild(Object.assign(el('text',{x:2,y:y+3,class:'axis-label'}),{textContent:Math.round(maxV*f)}));
+  });
+
+  let path = '';
+  data.forEach((d,i)=>{
+    const x = padL + i*stepX;
+    const y = padT + (H-padT-padB)*(1-d.aqi/maxV);
+    path += (i===0?'M':'L') + x + ',' + y + ' ';
+  });
+  const areaPath = path + `L${padL+(data.length-1)*stepX},${H-padB} L${padL},${H-padB} Z`;
+  svg.appendChild(el('path',{d:areaPath, fill:'var(--verypoor)', opacity:0.10}));
+  svg.appendChild(el('path',{d:path, fill:'none', stroke:'var(--verypoor)', 'stroke-width':1.4}));
+
+  // year labels
+  const yearsSeen = new Set();
+  data.forEach((d,i)=>{
+    const yr = d.date.slice(0,4);
+    if(!yearsSeen.has(yr) && i>2){
+      yearsSeen.add(yr);
+      const x = padL + i*stepX;
+      svg.appendChild(el('line',{x1:x,x2:x,y1:padT,y2:H-padB,class:'gridline','stroke-dasharray':'2,2'}));
+      svg.appendChild(Object.assign(el('text',{x:x+4,y:H-8,class:'axis-label'}),{textContent:yr}));
+    }
+  });
+
+  const hoverLine = el('line',{x1:0,x2:0,y1:padT,y2:H-padB,stroke:'var(--text-dimmer)','stroke-width':1,opacity:0});
+  svg.appendChild(hoverLine);
+  const hitArea = el('rect',{x:padL,y:padT,width:W-padL-padR,height:H-padT-padB,fill:'transparent'});
+  hitArea.addEventListener('mousemove', e=>{
+    const rect = svg.getBoundingClientRect();
+    const scaleX = W/rect.width;
+    const mx = (e.clientX-rect.left)*scaleX;
+    const i = Math.max(0,Math.min(data.length-1, Math.round((mx-padL)/stepX)));
+    const d = data[i];
+    hoverLine.setAttribute('x1', padL+i*stepX);
+    hoverLine.setAttribute('x2', padL+i*stepX);
+    hoverLine.setAttribute('opacity', 1);
+    showTip(e, `${d.date} — AQI ${d.aqi}`);
+  });
+  hitArea.addEventListener('mouseleave', ()=>{ hoverLine.setAttribute('opacity',0); hideTip(); });
+  svg.appendChild(hitArea);
+})();
+
+function bucketFor(v){
+  if(v<=50) return "Good";
+  if(v<=100) return "Satisfactory";
+  if(v<=200) return "Moderate";
+  if(v<=300) return "Poor";
+  if(v<=400) return "Very Poor";
+  return "Severe";
+}
+
+// ---- scatter: actual vs predicted ----
+(function(){
+  const svg = document.getElementById('scatterChart');
+  const W=480,H=480,pad=44;
+  const data = DATA.scatter;
+  const maxV = Math.max(...data.map(d=>Math.max(d.actual,d.predicted)))*1.03;
+
+  [0,0.25,0.5,0.75,1].forEach(f=>{
+    const y = pad + (H-2*pad)*(1-f);
+    const x = pad + (H-2*pad)*f;
+    svg.appendChild(el('line',{x1:pad,x2:W-pad,y1:y,y2:y,class:'gridline'}));
+    svg.appendChild(Object.assign(el('text',{x:6,y:y+3,class:'axis-label'}),{textContent:Math.round(maxV*f)}));
+    svg.appendChild(Object.assign(el('text',{x, y:H-pad+16,'text-anchor':'middle',class:'axis-label'}),{textContent:Math.round(maxV*f)}));
+  });
+
+  svg.appendChild(el('line',{x1:pad,y1:H-pad,x2:W-pad,y2:pad,stroke:'var(--satisfactory)','stroke-width':1.6,'stroke-dasharray':'5,4',opacity:0.85}));
+
+  data.forEach(d=>{
+    const x = pad + (d.actual/maxV)*(W-2*pad);
+    const y = H-pad - (d.predicted/maxV)*(H-2*pad);
+    const c = el('circle',{cx:x,cy:y,r:2.6,fill:'var(--poor)',opacity:0.55});
+    c.addEventListener('mousemove', e=>showTip(e, `actual ${Math.round(d.actual)} · predicted ${Math.round(d.predicted)}`));
+    c.addEventListener('mouseleave', hideTip);
+    svg.appendChild(c);
+  });
+
+  svg.appendChild(Object.assign(el('text',{x:W/2,y:H-6,'text-anchor':'middle',class:'axis-label'}),{textContent:'actual AQI'}));
+  svg.appendChild(Object.assign(el('text',{x:12,y:H/2,'text-anchor':'middle',class:'axis-label',transform:`rotate(-90 12 ${H/2})`}),{textContent:'predicted AQI'}));
+})();
+
+// ---- feature importance ----
+(function(){
+  const svg = document.getElementById('importanceChart');
+  const W=460,H=480,padL=118,padR=44,padT=10,padB=10;
+  const data = DATA.feature_importance.slice(0,12).reverse();
+  const maxV = Math.max(...data.map(d=>d.importance))*1.1;
+  const bh = (H-padT-padB)/data.length;
+
+  data.forEach((d,i)=>{
+    const y = padT + i*bh;
+    const w = (d.importance/maxV)*(W-padL-padR);
+    svg.appendChild(Object.assign(el('text',{x:padL-8,y:y+bh/2+4,'text-anchor':'end',class:'axis-label'}),{textContent:d.feature}));
+    const rect = el('rect',{x:padL,y:y+bh*0.22,width:Math.max(w,2),height:bh*0.56,fill:'var(--poor)',rx:2,opacity:0.9});
+    rect.addEventListener('mousemove', e=>showTip(e, `${d.feature}: ${(d.importance*100).toFixed(1)}%`));
+    rect.addEventListener('mouseleave', hideTip);
+    svg.appendChild(rect);
+  });
+})();
+
+// ---- reveal on scroll ----
+const observer = new IntersectionObserver((entries)=>{
+  entries.forEach(entry=>{
+    if(entry.isIntersecting){ entry.target.classList.add('in'); observer.unobserve(entry.target); }
+  });
+},{threshold:0.12});
+document.querySelectorAll('.reveal').forEach(elx=>observer.observe(elx));
+</script>
+</body>
+</html>
