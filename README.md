@@ -2,7 +2,6 @@
 
 A Random Forest pipeline that predicts Delhi's Air Quality Index (AQI) from two years of hourly pollutant readings (CO, NO, NO₂, SO₂, O₃, PM2.5, PM10, NH₃), paired with a static, data-driven dashboard that walks through the cleaning, feature engineering, and model results.
 
-**[View the live dashboard →](index.html)**
 
 ## What's in here
 
